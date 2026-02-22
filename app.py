@@ -53,14 +53,20 @@ if st.session_state.user is None:
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
 
-    if st.button("Enter"):
-        users = users_sheet.get_all_records()
-        for user in users:
-            if user["username"] == username and user["password"] == password:
-                st.session_state.user = username
-                st.session_state.xp = int(user.get("xp", 0))
-                st.rerun()
-        st.error("Wrong credentials")
+if st.button("Enter"):
+    users = users_sheet.get_all_records()
+
+    for user in users:
+        sheet_username = str(user.get("username", "")).strip()
+        sheet_password = str(user.get("password", "")).strip()
+
+        if sheet_username == username.strip() and sheet_password == password.strip():
+            st.session_state.user = sheet_username
+            st.session_state.xp = int(user.get("xp", 0))
+            st.success("Login successful!")
+            st.rerun()
+
+    st.error("Wrong credentials")
 
 # ---------------- MAIN APP ----------------
 else:
