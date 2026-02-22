@@ -191,15 +191,15 @@ def get_log_data(sheet, force_refresh=False):
     if not force_refresh and st.session_state.cache_log is not None:
         if current:
 
-def get_users_data(sheet, force_refresh=False):
-    """Get users data with session-based caching (shorter cache for login)"""
-    current_time = datetime.now().timestamp()
-    cache_time = st.session_state.get("cache_users_time", 0)
-    
-    # Shorter cache for users (30 seconds) since login needs fresh data
-    if not force_refresh and st.session_state.cache_users is not None:
-        if current_time - cache_time < 30:
-            return st.session_state.cache_users
+    def get_users_data(sheet, force_refresh=False):
+        """Get users data with session-based caching (shorter cache for login)"""
+        current_time = datetime.now().timestamp()
+        cache_time = st.session_state.get("cache_users_time", 0)
+        
+        # Shorter cache for users (30 seconds) since login needs fresh data
+        if not force_refresh and st.session_state.cache_users is not None:
+            if current_time - cache_time < 30:
+                return st.session_state.cache_users
     
     try:
         users_sheet = sheet.worksheet("USERS")
