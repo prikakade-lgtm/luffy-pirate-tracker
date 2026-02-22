@@ -47,14 +47,15 @@ if st.session_state.user is None:
     if st.button("Enter the Grand Line"):
         users = users_sheet.get_all_records()
         st.write(users)
+        users = users_sheet.get_all_records()
+
         for user in users:
-            if user["username"] == username and user["password"] == password:
+            if str(user.get("username")).strip() == username.strip() and str(user.get("password")).strip() == password.strip():
                 st.session_state.user = username
-                st.session_state.xp = user["xp"]
-                st.session_state.water_streak = user["water_streak"]
+                st.session_state.xp = int(user.get("xp", 0))
+                st.session_state.water_streak = int(user.get("water_streak", 0))
                 st.success("Welcome aboard!")
                 st.rerun()
-
         st.error("Wrong credentials.")
 
 else:
