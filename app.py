@@ -47,20 +47,27 @@ if "water_count" not in st.session_state:
     st.session_state.water_count = 0
 
 # ---------------- LOGIN ----------------
+st.header("Login")
+username_input = st.text_input("Username")
+password_input = st.text_input("Password", type="password")
+
 if st.button("Enter"):
-    users = users_sheet.get_all_records()
+    if not username_input or not password_input:
+        st.warning("Please enter both username and password.")
+    else:
+        users = users_sheet.get_all_records()
 
-    for user in users:
-        sheet_username = str(user.get("username", "")).strip()
-        sheet_password = str(user.get("password", "")).strip()
+        for user in users:
+            sheet_username = str(user.get("username", "")).strip()
+            sheet_password = str(user.get("password", "")).strip()
 
-        if sheet_username == username.strip() and sheet_password == password.strip():
-            st.session_state.user = sheet_username
-            st.session_state.xp = int(user.get("xp", 0))
-            st.success("Login successful!")
-            st.rerun()
+            if sheet_username == username_input.strip() and sheet_password == password_input.strip():
+                st.session_state.user = sheet_username
+                st.session_state.xp = int(user.get("xp", 0))
+                st.success("Login successful!")
+                st.rerun()
 
-    st.error("Wrong credentials")
+        st.error("Wrong credentials")
 # ---------------- MAIN APP ----------------
 else:
 
