@@ -3,8 +3,12 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import date
 import random
+import time
 
 # ================= CONFIGURATION =================
+
+# Fixed username - no login required
+CAPTAIN_NAME = "Tuvayh Luffy"
 
 # Crew Roles Configuration
 CREW_ROLES = [
@@ -119,15 +123,119 @@ st.markdown('<div class="big-title">🏴‍☠️ Luffy\'s Grand Line RPG</div>'
 
 # ================= SESSION STATE =================
 defaults = {
-    "user": None, "xp": 0, "difficulty_multiplier": 1.0,
+    "xp": 0, "difficulty_multiplier": 1.0,
     "water_count": 0, "streak": 0,
     "water_streak": 0, "perfect_days": 0, "tasks_completed": 0,
     "healthy_days": 0, "early_submissions": 0, "late_submissions": 0,
-    "balanced_days": 0, "achievements": []
+    "balanced_days": 0, "achievements": [],
+    # Cache storage
+    "timetable_data": None, "timetable_time": 0,
+    "reading_data": None, "reading_time": 0,
+    "presentation_data": None, "presentation_time": 0,
+    "log_data": None, "log_time": 0
 }
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
+
+# ================= GOOGLE SHEETS WITH CACHING =================
+@st.cache_resource
+def get_gspread_client():
+    """Get Google Sheets client (cached)"""
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"Connection error: {e}")
+        return None
+
+def get_spreadsheet(client):
+    """Get spreadsheet (cached)"""
+    try:
+        return client.open("Pirate_Tracker_DB")
+    except Exception as e:
+        st.error(f"Spreadsheet error: {e}")
+        return None
+
+def get_timetable(sheet, force_refresh=False):
+    """Get timetable data with caching"""
+    current_time = time.time()
+    
+    if not force_refresh and st.session_state.timetable_data is not None:
+        if current_time - st.session_state.timetable_time < 300:  # 5 minutes
+            return st.session_state.timetable_data
+    
+    try:
+        timetable_sheet = sheet.worksheet("TIMETABLE")
+        records = timetable_sheet.get_all_records()
+        st.session_state.timetable_data = records
+        st.session_state.timetable_time = current_time
+        return records
+    except:
+        return st.session_state.timetable_data or []
+
+def get_reading(sheet, force_refresh=False):
+    """Get reading data with caching"""
+    current_time = time.time()
+    
+    if not force_refresh and st.session_state.reading_data is not None:
+        if current_time - st.session_state.reading_time < 300:
+            return st.session_state.reading_data
+    
+    try:
+        reading_sheet = sheet.worksheet("READING_REFLECTIONS")
+        records = reading_sheet.get_all_records()
+        st.session_state.reading_data = records
+        st.session_state.reading_time = current_time
+        return records
+    except:
+        return st.session_state.reading_data or []
+
+def get_presentation(sheet, force_refresh=False):
+    """Get presentation data with caching"""
+    current_time = time.time()
+    
+    if not force_refresh and st.session_state.presentation_data is not None:
+        if current_time - st.session_state.presentation_time < 300:
+            return st.session_state.presentation_data
+    
+    try:
+        presentation_sheet = sheet.worksheet("PRESENTATIONS")
+        records = presentation_sheet.get_all_records()
+        st.session_state.presentation_data = records
+        st.session_state.presentation_time = current_time
+        return records
+    except:
+        return st.session_state.presentation_data or []
+
+def get_log(sheet, force_refresh=False):
+    """Get log data with caching"""
+    current_time = time.time()
+    
+    if not force_refresh and st.session_state.log_data is not None:
+        if current_time - st.session_state.log_time < 300:
+            return st.session_state.log_data
+    
+    try:
+        log_sheet = sheet.worksheet("DAILY_LOG")
+        records = log_sheet.get_all_records()
+        st.session_state.log_data = records
+        st.session_state.log_time = current_time
+        return records
+    except:
+        return st.session_state.log_data or []
+
+def append_log(sheet, row_data):
+    """Append to log and invalidate cache"""
+    try:
+        log_sheet = sheet.worksheet("DAILY_LOG")
+        log_sheet.append_row(row_data)
+        st.session_state.log_data = None  # Invalidate cache
+        return True
+    except Exception as e:
+        st.error(f"Error saving log: {e}")
+        return False
 
 # ================= HELPER FUNCTIONS =================
 
@@ -154,7 +262,7 @@ def get_current_island(xp):
 def get_welcome_message():
     """Get a personalized welcome message"""
     message = random.choice(WELCOME_MESSAGES)
-    return message.format(user=st.session_state.user)
+    return message.format(user=CAPTAIN_NAME)
 
 def check_achievements():
     """Check and award new achievements"""
@@ -165,62 +273,6 @@ def check_achievements():
                 st.session_state.achievements.append(achievement_id)
                 new_achievements.append(achievement_data)
     return new_achievements
-
-# ================= GOOGLE SHEETS =================
-def get_sheet():
-    """Initialize Google Sheets connection"""
-    try:
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-        client = gspread.authorize(creds)
-        return client.open("Pirate_Tracker_DB")
-    except Exception as e:
-        st.error(f"Connection error: {e}")
-        return None
-
-# ================= LOGIN =================
-def login_page(sheet):
-    st.header("🛡️ Login")
-    
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    
-    if st.button("⚓ Set Sail"):
-        if not username or not password:
-            st.warning("Please enter both username and password")
-            return
-        
-        try:
-            users_sheet = sheet.worksheet("USERS")
-            users = users_sheet.get_all_records()
-            
-            for user in users:
-                if str(user.get("username", "")).strip() == username.strip():
-                    if str(user.get("password", "")).strip() == password.strip():
-                        st.session_state.user = username
-                        st.session_state.xp = int(user.get("xp", 0))
-                        st.session_state.difficulty_multiplier = float(user.get("difficulty_multiplier", 1.0))
-                        st.session_state.streak = int(user.get("streak", 0))
-                        
-                        # Load achievements
-                        achievements_str = user.get("achievements", "")
-                        st.session_state.achievements = achievements_str.split(",") if achievements_str else []
-                        
-                        # Check for first login achievement
-                        new_achievements = check_achievements()
-                        for achievement in new_achievements:
-                            st.balloons()
-                            st.success(f"🏆 Achievement Unlocked: {achievement['icon']} {achievement['name']}!")
-                        
-                        st.success("Login successful!")
-                        st.rerun()
-                    else:
-                        st.error("Wrong password!")
-                        return
-            
-            st.error("User not found!")
-        except Exception as e:
-            st.error(f"Error: {e}")
 
 # ================= DASHBOARD =================
 def dashboard_page(sheet, preview_date):
@@ -265,12 +317,8 @@ def dashboard_page(sheet, preview_date):
     today_str = str(preview_date)
     
     # Get timetable
-    try:
-        timetable_sheet = sheet.worksheet("TIMETABLE")
-        timetable = timetable_sheet.get_all_records()
-        today_tasks = [t for t in timetable if t.get("date") == today_str]
-    except:
-        today_tasks = []
+    timetable = get_timetable(sheet)
+    today_tasks = [t for t in timetable if t.get("date") == today_str]
     
     # Display tasks
     if today_tasks:
@@ -282,32 +330,24 @@ def dashboard_page(sheet, preview_date):
                 st.write("• " + task.get("title", "Task"))
     
     # Reading questions
-    try:
-        reading_sheet = sheet.worksheet("READING_REFLECTIONS")
-        reading_data = reading_sheet.get_all_records()
-        reading_tasks = [t for t in today_tasks if t.get("category") == "Reading"]
-        
-        if reading_tasks:
-            st.subheader("📘 Reading Questions")
-            for r_task in reading_tasks:
-                for row in reading_data:
-                    if row.get("book", "").lower() in r_task.get("title", "").lower():
-                        st.write("• " + row.get("question", ""))
-    except:
-        pass
+    reading_data = get_reading(sheet)
+    reading_tasks = [t for t in today_tasks if t.get("category") == "Reading"]
+    
+    if reading_tasks:
+        st.subheader("📘 Reading Questions")
+        for r_task in reading_tasks:
+            for row in reading_data:
+                if row.get("book", "").lower() in r_task.get("title", "").lower():
+                    st.write("• " + row.get("question", ""))
     
     # Presentation prompts
-    try:
-        presentation_sheet = sheet.worksheet("PRESENTATIONS")
-        presentation_data = presentation_sheet.get_all_records()
-        todays_prompts = [p for p in presentation_data if p.get("date") == today_str]
-        
-        if todays_prompts:
-            st.subheader("🎤 Presentation Prompts")
-            for p in todays_prompts:
-                st.write("• " + p.get("prompt", ""))
-    except:
-        pass
+    presentation_data = get_presentation(sheet)
+    todays_prompts = [p for p in presentation_data if p.get("date") == today_str]
+    
+    if todays_prompts:
+        st.subheader("🎤 Presentation Prompts")
+        for p in todays_prompts:
+            st.write("• " + p.get("prompt", ""))
     
     st.divider()
     st.write(f"**Difficulty:** {st.session_state.difficulty_multiplier:.2f}x")
@@ -376,12 +416,8 @@ def missions_page(sheet, preview_date):
     # Tasks
     st.header("📋 Today's Missions")
     
-    try:
-        timetable_sheet = sheet.worksheet("TIMETABLE")
-        timetable = timetable_sheet.get_all_records()
-        today_tasks = [t for t in timetable if t.get("date") == today_str]
-    except:
-        today_tasks = []
+    timetable = get_timetable(sheet)
+    today_tasks = [t for t in timetable if t.get("date") == today_str]
     
     task_xp_total = 0
     tasks_done = 0
@@ -440,32 +476,20 @@ def missions_page(sheet, preview_date):
             st.success(f"🏆 Achievement Unlocked: {achievement['icon']} {achievement['name']}!")
         
         # Save to Google Sheets
-        try:
-            log_sheet = sheet.worksheet("DAILY_LOG")
-            log_sheet.append_row([
-                st.session_state.user,
-                today_str,
-                xp_today,
-                st.session_state.difficulty_multiplier,
-                st.session_state.streak
-            ])
-            
-            # Update user XP
-            users_sheet = sheet.worksheet("USERS")
-            users = users_sheet.get_all_records()
-            for idx, user in enumerate(users, start=2):
-                if str(user.get("username", "")).strip() == st.session_state.user:
-                    users_sheet.update_cell(idx, 4, st.session_state.xp)
-                    users_sheet.update_cell(idx, 5, st.session_state.difficulty_multiplier)
-                    users_sheet.update_cell(idx, 6, st.session_state.streak)
-                    users_sheet.update_cell(idx, 7, ",".join(st.session_state.achievements))
-                    break
-            
+        success = append_log(sheet, [
+            CAPTAIN_NAME,
+            today_str,
+            xp_today,
+            st.session_state.difficulty_multiplier,
+            st.session_state.streak
+        ])
+        
+        if success:
             st.success("Day submitted!")
             st.balloons()
+            # Reset daily counters
+            st.session_state.water_count = 0
             st.rerun()
-        except Exception as e:
-            st.error(f"Error saving: {e}")
 
 # ================= STATS =================
 def stats_page(sheet):
@@ -521,52 +545,55 @@ def stats_page(sheet):
                 """, unsafe_allow_html=True)
     
     # Historical stats
-    try:
-        log_sheet = sheet.worksheet("DAILY_LOG")
-        records = log_sheet.get_all_records()
-        user_records = [r for r in records if r.get("username") == st.session_state.user]
+    log_data = get_log(sheet)
+    user_records = [r for r in log_data if r.get("username") == CAPTAIN_NAME]
+    
+    if user_records:
+        st.divider()
+        st.subheader("📜 Pirate Log History")
+        xp_values = [int(r.get("xp_today", 0)) for r in user_records]
+        st.write(f"**Days Logged:** {len(user_records)}")
+        st.write(f"**Total XP Earned:** {sum(xp_values)}")
+        st.write(f"**Average XP:** {sum(xp_values)/len(xp_values):.1f}")
+        st.write(f"**Best Day:** {max(xp_values)}")
         
-        if user_records:
-            st.divider()
-            st.subheader("📜 Pirate Log History")
-            xp_values = [int(r.get("xp_today", 0)) for r in user_records]
-            st.write(f"**Days Logged:** {len(user_records)}")
-            st.write(f"**Total XP Earned:** {sum(xp_values)}")
-            st.write(f"**Average XP:** {sum(xp_values)/len(xp_values):.1f}")
-            st.write(f"**Best Day:** {max(xp_values)}")
-            
-            st.line_chart(xp_values)
-    except:
-        pass
+        st.line_chart(xp_values)
 
 # ================= MAIN =================
 def main():
-    sheet = get_sheet()
+    # Get Google Sheets connection
+    client = get_gspread_client()
+    if client is None:
+        return
+    
+    sheet = get_spreadsheet(client)
     if sheet is None:
         return
     
-    if not st.session_state.user:
-        login_page(sheet)
-    else:
-        # Sidebar
-        st.sidebar.title("🏴‍☠️ Navigation")
-        preview_date = st.sidebar.date_input("Date", value=date.today())
-        page = st.sidebar.radio("Go to", ["Dashboard", "Missions", "Stats"])
-        
-        st.sidebar.divider()
-        if st.sidebar.button("🚪 Logout"):
-            for key in list(st.session_state.keys()):
-                if key not in ["_is_running", "_is_local"]:
-                    del st.session_state[key]
-            st.rerun()
-        
-        # Main content
-        if page == "Dashboard":
-            dashboard_page(sheet, preview_date)
-        elif page == "Missions":
-            missions_page(sheet, preview_date)
-        elif page == "Stats":
-            stats_page(sheet)
+    # Welcome message
+    st.success(f"🏴‍☠️ Welcome Captain {CAPTAIN_NAME}!")
+    
+    # Sidebar
+    st.sidebar.title("🏴‍☠️ Navigation")
+    preview_date = st.sidebar.date_input("Date", value=date.today())
+    page = st.sidebar.radio("Go to", ["Dashboard", "Missions", "Stats"])
+    
+    # Refresh button
+    st.sidebar.divider()
+    if st.sidebar.button("🔄 Refresh Data"):
+        st.session_state.timetable_data = None
+        st.session_state.reading_data = None
+        st.session_state.presentation_data = None
+        st.session_state.log_data = None
+        st.rerun()
+    
+    # Main content
+    if page == "Dashboard":
+        dashboard_page(sheet, preview_date)
+    elif page == "Missions":
+        missions_page(sheet, preview_date)
+    elif page == "Stats":
+        stats_page(sheet)
 
 if __name__ == "__main__":
     main()
