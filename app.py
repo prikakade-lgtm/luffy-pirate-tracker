@@ -125,106 +125,150 @@ else:
             st.progress(progress_ratio)
 
 # =====================================================
-# MISSIONS
+# MISSIONS – VISUAL RPG MODE
 # =====================================================
 if page == "⚔️ Missions":
 
     st.header("⚓ Daily Missions")
 
-    # ---------------- WATER TRACKER ----------------
-    st.subheader("💧 Water Intake (8 Glasses)")
+    # ---------------- WATER SYSTEM ----------------
+    st.subheader("💧 Water Intake")
 
-    if "water_glasses" not in st.session_state:
-        st.session_state.water_glasses = [0]*8
+    if "water_count" not in st.session_state:
+        st.session_state.water_count = 0
 
-    cols = st.columns(8)
-    for i in range(8):
-        with cols[i]:
-            if st.button(
-                "🥛" if st.session_state.water_glasses[i] else "💧",
-                key=f"water_{i}"
-            ):
-                st.session_state.water_glasses[i] ^= 1
+    col1, col2 = st.columns([4,1])
 
-    water_total = sum(st.session_state.water_glasses)
-    st.write(f"{water_total}/8 Glasses")
+    with col1:
+        st.progress(st.session_state.water_count / 8)
 
-    # ---------------- VEG COLOR TRACKER ----------------
-    st.subheader("🥦 Vegetable Colors (3 Colors)")
+    with col2:
+        if st.button("Drink 🥛"):
+            if st.session_state.water_count < 8:
+                st.session_state.water_count += 1
 
-    veg_colors = ["Green", "Red", "Orange"]
+    st.write(f"{st.session_state.water_count}/8 Glasses")
+
+    # ---------------- VEG COLOR SYSTEM ----------------
+    st.subheader("🥦 Vegetable Colors")
+
+    veg_colors = {
+        "Green": "#22c55e",
+        "Red": "#ef4444",
+        "Orange": "#f97316"
+    }
+
     if "veg_tracker" not in st.session_state:
         st.session_state.veg_tracker = {c:0 for c in veg_colors}
 
-    for color in veg_colors:
-        col1, col2 = st.columns([3,1])
+    for color, hexcode in veg_colors.items():
+
+        col1, col2 = st.columns([4,1])
+
         with col1:
-            st.write(f"{color}")
+            filled = st.session_state.veg_tracker[color]
+            ratio = min(filled / 3, 1)
+
+            st.markdown(
+                f"""
+                <div style="background-color:#333;border-radius:20px;">
+                    <div style="
+                        width:{ratio*100}%;
+                        background:{hexcode};
+                        height:20px;
+                        border-radius:20px;">
+                    </div>
+                </div>
+                <p>{color} Portions: {filled}</p>
+                """,
+                unsafe_allow_html=True
+            )
+
         with col2:
             if st.button("+", key=f"veg_{color}"):
                 st.session_state.veg_tracker[color] += 1
 
     veg_total = sum(st.session_state.veg_tracker.values())
-    st.write(f"Total Veg Portions: {veg_total}")
 
-    # ---------------- FOOD GROUP TRACKER ----------------
-    st.subheader("🍗 Food Groups (4 Groups)")
+    # ---------------- FOOD GROUP SYSTEM ----------------
+    st.subheader("🍗 Food Groups")
 
-    food_groups = ["Protein", "Carbs", "Fruits", "Dairy"]
+    food_groups = {
+        "Protein": "🍗",
+        "Carbs": "🍞",
+        "Fruits": "🍎",
+        "Dairy": "🥛"
+    }
+
     if "food_tracker" not in st.session_state:
         st.session_state.food_tracker = {g:0 for g in food_groups}
 
-    for group in food_groups:
-        col1, col2 = st.columns([3,1])
+    for group, icon in food_groups.items():
+
+        col1, col2 = st.columns([4,1])
+
         with col1:
-            st.write(f"{group}")
+            filled = st.session_state.food_tracker[group]
+            ratio = min(filled / 3, 1)
+
+            st.progress(ratio)
+            st.write(f"{icon} {group}: {filled}")
+
         with col2:
             if st.button("+", key=f"food_{group}"):
                 st.session_state.food_tracker[group] += 1
 
     food_total = sum(st.session_state.food_tracker.values())
-    st.write(f"Total Food Portions: {food_total}")
 
-    # ---------------- SKILL / ACTIVITY TRACKER ----------------
-    st.subheader("⚔️ Skill & Training")
+    # ---------------- SKILL LEVEL SYSTEM ----------------
+    st.subheader("⚔️ Skills & Training")
 
-    activities = [
+    skills = [
         "Exercise",
         "Yoga",
         "Reading",
         "Writing",
         "Drums",
         "Piano",
-        "TED Talk",
         "Skill Practice",
         "Outdoor",
         "Chores",
         "Cooking"
     ]
 
-    if "activity_tracker" not in st.session_state:
-        st.session_state.activity_tracker = {a:0 for a in activities}
+    if "skill_tracker" not in st.session_state:
+        st.session_state.skill_tracker = {s:0 for s in skills}
 
-    for act in activities:
-        col1, col2 = st.columns([3,1])
+    for skill in skills:
+
+        col1, col2 = st.columns([4,1])
+
         with col1:
-            st.write(act)
-        with col2:
-            if st.button("+", key=f"act_{act}"):
-                st.session_state.activity_tracker[act] += 1
+            level = st.session_state.skill_tracker[skill]
+            ratio = min(level / 5, 1)
 
-    activity_total = sum(st.session_state.activity_tracker.values())
-    st.write(f"Total Activities Completed: {activity_total}")
+            st.progress(ratio)
+            st.write(f"{skill} Level: {level}")
+
+        with col2:
+            if st.button("+", key=f"skill_{skill}"):
+                st.session_state.skill_tracker[skill] += 1
+
+    skill_total = sum(st.session_state.skill_tracker.values())
 
     # ---------------- XP CALCULATION ----------------
-    water_xp = water_total * 5
+    water_xp = st.session_state.water_count * 5
     veg_xp = veg_total * 5
     food_xp = food_total * 5
-    activity_xp = activity_total * 10
+    skill_xp = skill_total * 10
 
-    perfect_bonus = 50 if water_total == 8 and veg_total >=3 and food_total >=4 else 0
+    perfect_bonus = 50 if (
+        st.session_state.water_count == 8 and
+        veg_total >= 3 and
+        food_total >= 4
+    ) else 0
 
-    total_today = water_xp + veg_xp + food_xp + activity_xp + perfect_bonus
+    total_today = water_xp + veg_xp + food_xp + skill_xp + perfect_bonus
 
     st.markdown(f"### ⭐ Potential XP Today: {total_today}")
 
@@ -250,10 +294,10 @@ if page == "⚔️ Missions":
             log_sheet.append_row([
                 st.session_state.user,
                 today_str,
-                water_total,
+                st.session_state.water_count,
                 veg_total,
                 food_total,
-                activity_total,
+                skill_total,
                 total_today
             ])
 
@@ -262,11 +306,11 @@ if page == "⚔️ Missions":
                     users_sheet.update(f"C{idx+2}", st.session_state.xp)
                     users_sheet.update(f"E{idx+2}", today_str)
 
-            # RESET DAILY TRACKERS
-            st.session_state.water_glasses = [0]*8
+            # RESET ALL DAILY DATA
+            st.session_state.water_count = 0
             st.session_state.veg_tracker = {c:0 for c in veg_colors}
             st.session_state.food_tracker = {g:0 for g in food_groups}
-            st.session_state.activity_tracker = {a:0 for a in activities}
+            st.session_state.skill_tracker = {s:0 for s in skills}
 
             st.success(f"+{total_today} XP earned!")
 
