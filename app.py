@@ -131,9 +131,8 @@ def get_timetable_data(sheet, force_refresh=False):
     current_time = datetime.now().timestamp()
     cache_time = st.session_state.get("cache_timetable_time", 0)
     
-    # Refresh if forced or cache is older than 5 minutes
     if not force_refresh and st.session_state.cache_timetable is not None:
-        if current_time - cache_time < 300:  # 5 minutes
+        if current_time - cache_time < 300:
             return st.session_state.cache_timetable
     
     try:
@@ -190,18 +189,7 @@ def get_log_data(sheet, force_refresh=False):
     cache_time = st.session_state.get("cache_log_time", 0)
     
     if not force_refresh and st.session_state.cache_log is not None:
-        if current_time - cache_time < 300:
-            return st.session_state.cache_log
-    
-    try:
-        log_sheet = sheet.worksheet("DAILY_LOG")
-        records = log_sheet.get_all_records()
-        st.session_state.cache_log = records
-        st.session_state.cache_log_time = current_time
-        return records
-    except Exception as e:
-        st.error(f"📜 Failed to load daily log: {e}")
-        return st.session_state.cache_log if st.session_state.cache_log else []
+        if current
 
 def get_users_data(sheet, force_refresh=False):
     """Get users data with session-based caching (shorter cache for login)"""
