@@ -6,7 +6,6 @@ import hashlib
 import csv
 import io
 import random
-from functools import wraps
 
 # ================= CONFIGURATION =================
 
@@ -73,64 +72,7 @@ WELCOME_MESSAGES = [
     "🌟 The stars align for {user} today!"
 ]
 
-# ================= SECURITY FUNCTIONS =================
-
-def hash_password(password):
-    """Hash password using SHA-256 with salt"""
-    salt = "luffys_crew_salt_2024"
-    return hashlib.sha256((password + salt).encode()).hexdigest()
-
-def verify_password(input_password, stored_hash):
-    """Verify password against stored hash"""
-    return hash_password(input_password) == stored_hash
-
-# ================= GOOGLE SHEETS FUNCTIONS =================
-
-@st.cache_data(ttl=300)
-def safe_get_records(worksheet, query=None):
-    """Safely retrieve records with error handling and caching"""
-    try:
-        records = worksheet.get_all_records()
-        if query:
-            records = [r for r in records if all(
-                str(r.get(k, "")).lower() == str(v).lower() 
-                for k, v in query.items()
-            )]
-        return records
-    except gspread.exceptions.APIError as e:
-        st.error(f"📜 Grand Line Communication Error: Unable to reach the ship logs. Please try again.")
-        return []
-    except Exception as e:
-        st.error(f"⚓ Unexpected error: {e}")
-        return []
-
-def safe_append_row(worksheet, row_data):
-    """Safely append row with error handling"""
-    try:
-        worksheet.append_row(row_data)
-        return True
-    except gspread.exceptions.APIError as e:
-        st.error(f"📜 Failed to write to ship logs: {e}")
-        return False
-    except Exception as e:
-        st.error(f"⚓ Failed to append row: {e}")
-        return False
-
-def init_google_sheets():
-    """Initialize Google Sheets connection"""
-    try:
-        creds = Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
-            scopes=SCOPE
-        )
-        client = gspread.authorize(creds)
-        sheet = client.open("Pirate_Tracker_DB")
-        return sheet
-    except Exception as e:
-        st.error(f"⚓ Failed to connect to Google Sheets: {e}")
-        return None
-
-# ================= SESSION STATE FUNCTIONS =================
+# ================= SESSION STATE MANAGEMENT =================
 
 def init_session_state():
     """Initialize all session state variables with defaults"""
@@ -150,12 +92,183 @@ def init_session_state():
         "early_submissions": 0,
         "late_submissions": 0,
         "balanced_days": 0,
-        "logged_in_today": False
+        "logged_in_today": False,
+        # Cache storage
+        "cache_timetable": None,
+        "cache_timetable_time": 0,
+        "cache_reading": None,
+        "cache_reading_time": 0,
+        "cache_presentation": None,
+        "cache_presentation_time": 0,
+        "cache_log": None,
+        "cache_log_time": 0,
+        "cache_users": None,
+        "cache_users_time": 0
     }
     
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+# ================= GOOGLE SHEETS FUNCTIONS =================
+
+def init_google_sheets():
+    """Initialize Google Sheets connection"""
+    try:
+        creds = Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"],
+            scopes=SCOPE
+        )
+        client = gspread.authorize(creds)
+        sheet = client.open("Pirate_Tracker_DB")
+        return sheet
+    except Exception as e:
+        st.error(f"⚓ Failed to connect to Google Sheets: {e}")
+        return None
+
+def get_timetable_data(sheet, force_refresh=False):
+    """Get timetable data with session-based caching"""
+    current_time = datetime.now().timestamp()
+    cache_time = st.session_state.get("cache_timetable_time", 0)
+    
+    # Refresh if forced or cache is older than 5 minutes
+    if not force_refresh and st.session_state.cache_timetable is not None:
+        if current_time - cache_time < 300:  # 5 minutes
+            return st.session_state.cache_timetable
+    
+    try:
+        timetable_sheet = sheet.worksheet("TIMETABLE")
+        records = timetable_sheet.get_all_records()
+        st.session_state.cache_timetable = records
+        st.session_state.cache_timetable_time = current_time
+        return records
+    except Exception as e:
+        st.error(f"📜 Failed to load timetable: {e}")
+        return st.session_state.cache_timetable if st.session_state.cache_timetable else []
+
+def get_reading_data(sheet, force_refresh=False):
+    """Get reading reflections data with session-based caching"""
+    current_time = datetime.now().timestamp()
+    cache_time = st.session_state.get("cache_reading_time", 0)
+    
+    if not force_refresh and st.session_state.cache_reading is not None:
+        if current_time - cache_time < 300:
+            return st.session_state.cache_reading
+    
+    try:
+        reading_sheet = sheet.worksheet("READING_REFLECTIONS")
+        records = reading_sheet.get_all_records()
+        st.session_state.cache_reading = records
+        st.session_state.cache_reading_time = current_time
+        return records
+    except Exception as e:
+        st.error(f"📜 Failed to load reading reflections: {e}")
+        return st.session_state.cache_reading if st.session_state.cache_reading else []
+
+def get_presentation_data(sheet, force_refresh=False):
+    """Get presentation prompts data with session-based caching"""
+    current_time = datetime.now().timestamp()
+    cache_time = st.session_state.get("cache_presentation_time", 0)
+    
+    if not force_refresh and st.session_state.cache_presentation is not None:
+        if current_time - cache_time < 300:
+            return st.session_state.cache_presentation
+    
+    try:
+        presentation_sheet = sheet.worksheet("PRESENTATIONS")
+        records = presentation_sheet.get_all_records()
+        st.session_state.cache_presentation = records
+        st.session_state.cache_presentation_time = current_time
+        return records
+    except Exception as e:
+        st.error(f"📜 Failed to load presentation prompts: {e}")
+        return st.session_state.cache_presentation if st.session_state.cache_presentation else []
+
+def get_log_data(sheet, force_refresh=False):
+    """Get daily log data with session-based caching"""
+    current_time = datetime.now().timestamp()
+    cache_time = st.session_state.get("cache_log_time", 0)
+    
+    if not force_refresh and st.session_state.cache_log is not None:
+        if current_time - cache_time < 300:
+            return st.session_state.cache_log
+    
+    try:
+        log_sheet = sheet.worksheet("DAILY_LOG")
+        records = log_sheet.get_all_records()
+        st.session_state.cache_log = records
+        st.session_state.cache_log_time = current_time
+        return records
+    except Exception as e:
+        st.error(f"📜 Failed to load daily log: {e}")
+        return st.session_state.cache_log if st.session_state.cache_log else []
+
+def get_users_data(sheet, force_refresh=False):
+    """Get users data with session-based caching (shorter cache for login)"""
+    current_time = datetime.now().timestamp()
+    cache_time = st.session_state.get("cache_users_time", 0)
+    
+    # Shorter cache for users (30 seconds) since login needs fresh data
+    if not force_refresh and st.session_state.cache_users is not None:
+        if current_time - cache_time < 30:
+            return st.session_state.cache_users
+    
+    try:
+        users_sheet = sheet.worksheet("USERS")
+        records = users_sheet.get_all_records()
+        st.session_state.cache_users = records
+        st.session_state.cache_users_time = current_time
+        return records
+    except Exception as e:
+        st.error(f"📜 Failed to load users: {e}")
+        return st.session_state.cache_users if st.session_state.cache_users else []
+
+def append_log_entry(sheet, row_data):
+    """Append entry to daily log and update cache"""
+    try:
+        log_sheet = sheet.worksheet("DAILY_LOG")
+        log_sheet.append_row(row_data)
+        # Invalidate cache
+        st.session_state.cache_log = None
+        return True
+    except Exception as e:
+        st.error(f"📜 Failed to append log entry: {e}")
+        return False
+
+def update_user_data(sheet, username, new_xp):
+    """Update user's XP in the database"""
+    try:
+        users_sheet = sheet.worksheet("USERS")
+        records = users_sheet.get_all_records()
+        
+        for idx, user in enumerate(records, start=2):  # Start at 2 because row 1 is header
+            if str(user.get("username", "")).strip() == username:
+                # Update XP
+                users_sheet.update_cell(idx, 4, new_xp)
+                # Update difficulty multiplier
+                users_sheet.update_cell(idx, 5, st.session_state.difficulty_multiplier)
+                # Update streak
+                users_sheet.update_cell(idx, 6, st.session_state.streak)
+                # Update achievements
+                achievements_str = ",".join(st.session_state.achievements)
+                users_sheet.update_cell(idx, 7, achievements_str)
+                return True
+        
+        return False
+    except Exception as e:
+        st.error(f"📜 Failed to update user data: {e}")
+        return False
+
+# ================= SECURITY FUNCTIONS =================
+
+def hash_password(password):
+    """Hash password using SHA-256 with salt"""
+    salt = "luffys_crew_salt_2024"
+    return hashlib.sha256((password + salt).encode()).hexdigest()
+
+def verify_password(input_password, stored_hash):
+    """Verify password against stored hash"""
+    return hash_password(input_password) == stored_hash
 
 # ================= GAMIFICATION FUNCTIONS =================
 
@@ -188,13 +301,6 @@ def check_achievements():
                 st.session_state.achievements.append(achievement_id)
                 new_achievements.append(achievement_data)
     return new_achievements
-
-def calculate_xp(target_xp, earned_xp, difficulty_multiplier):
-    """Calculate XP with difficulty adjustment"""
-    if earned_xp < target_xp:
-        return int(earned_xp * difficulty_multiplier)
-    else:
-        return int(earned_xp * max(0.5, difficulty_multiplier - 0.05))
 
 def update_difficulty(xp_today, target_xp, current_multiplier):
     """Update difficulty multiplier based on performance"""
@@ -293,11 +399,7 @@ def apply_custom_css():
     
     .stats-card {
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        border: 2px solid #4a4a6a;
-        border-radius: 15px;
-        padding: 20px;
-        text-align: center;
-    }
+        border: 2px solid #4a4a6
     
     .crew-badge {
         background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
