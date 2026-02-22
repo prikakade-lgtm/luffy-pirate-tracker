@@ -46,6 +46,7 @@ if st.session_state.user is None:
 
     if st.button("Enter the Grand Line"):
         users = users_sheet.get_all_records()
+        st.write(users)
         for user in users:
             if user["username"] == username and user["password"] == password:
                 st.session_state.user = username
