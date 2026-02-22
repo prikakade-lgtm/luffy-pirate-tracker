@@ -189,7 +189,7 @@ def get_log_data(sheet, force_refresh=False):
     cache_time = st.session_state.get("cache_log_time", 0)
     
     if not force_refresh and st.session_state.cache_log is not None:
-        if current
+        if current:
 
 def get_users_data(sheet, force_refresh=False):
     """Get users data with session-based caching (shorter cache for login)"""
