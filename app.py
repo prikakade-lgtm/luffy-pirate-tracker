@@ -1,7 +1,7 @@
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import date
+from datetime import date, datetime
 
 # ---------------- GOOGLE SHEETS ----------------
 scope = [
@@ -29,6 +29,8 @@ st.set_page_config(page_title="Luffy Grand Line RPG", layout="wide")
 st.markdown("""
 <style>
 .big-title { font-size: 42px; font-weight: bold; color: #FFD700; }
+.water { font-size: 40px; }
+.section { margin-top: 30px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -63,16 +65,20 @@ if st.session_state.user is None:
 # ---------------- MAIN APP ----------------
 else:
 
+    # -------- DATE PREVIEW --------
+    st.sidebar.header("Date Preview")
+    preview_date = st.sidebar.date_input("Select Date", value=date.today())
+    today_str = str(preview_date)
+
     page = st.sidebar.radio("Navigate", ["Dashboard","Missions","Stats"])
 
-    today_str = str(date.today())
     timetable = timetable_sheet.get_all_records()
     today_tasks = [t for t in timetable if t["date"] == today_str]
 
     # ================= DASHBOARD =================
     if page == "Dashboard":
 
-        st.header("Today's Plan")
+        st.header(f"Plan for {preview_date.strftime('%A, %d %B %Y')}")
 
         for task in today_tasks:
             if task["category"] == "TED" and task["link"]:
@@ -83,7 +89,7 @@ else:
         # Reading questions
         reading_tasks = [t for t in today_tasks if t["category"] == "Reading"]
         if reading_tasks:
-            st.subheader("Reading Questions")
+            st.subheader("📘 Reading Questions")
             reading_data = reading_sheet.get_all_records()
             for r_task in reading_tasks:
                 for row in reading_data:
@@ -94,10 +100,11 @@ else:
         presentation_data = presentation_sheet.get_all_records()
         todays_prompts = [p for p in presentation_data if p["date"] == today_str]
         if todays_prompts:
-            st.subheader("Presentation Prompts")
+            st.subheader("🎤 Presentation Prompts")
             for p in todays_prompts:
                 st.write("• " + p["prompt"])
 
+        st.divider()
         st.write(f"Current XP: {st.session_state.xp}")
         st.write(f"Difficulty: {st.session_state.difficulty_multiplier:.2f}")
 
@@ -108,15 +115,20 @@ else:
 
         xp_today = 0
 
-        # -------- WATER TRACKER --------
+        # -------- WATER VISUAL FILL --------
         st.subheader("💧 Water Intake")
 
         cols = st.columns(8)
         for i in range(8):
-            if cols[i].button("🥛", key=f"water_{i}"):
+            if i < st.session_state.water_count:
+                glass = "🟦"  # filled
+            else:
+                glass = "⬜"  # empty
+
+            if cols[i].button(glass, key=f"water_{i}"):
                 st.session_state.water_count = i + 1
 
-        st.write(f"Glasses Drank: {st.session_state.water_count}/8")
+        st.write(f"{st.session_state.water_count}/8 glasses")
 
         if st.session_state.water_count >= 8:
             xp_today += int(10 * st.session_state.difficulty_multiplier)
@@ -137,7 +149,7 @@ else:
         veg_total_colors = 0
 
         for icon, key in veg_colors.items():
-            count = st.number_input(icon, min_value=0, max_value=5, key=f"veg_{key}")
+            count = st.number_input(icon, 0, 5, key=f"veg_{key}")
             if count > 0:
                 veg_total_colors += 1
 
@@ -160,7 +172,7 @@ else:
         food_total_groups = 0
 
         for icon, key in food_groups.items():
-            portions = st.number_input(icon, min_value=0, max_value=6, key=f"food_{key}")
+            portions = st.number_input(icon, 0, 6, key=f"food_{key}")
             if portions > 0:
                 food_total_groups += 1
 
@@ -181,7 +193,6 @@ else:
         st.write(f"XP Earned Today: {xp_today}")
 
         if st.button("Submit Day"):
-
             target = sum(int(t["xp"]) for t in today_tasks)
 
             if xp_today < target:
@@ -209,7 +220,6 @@ else:
 
         records = log_sheet.get_all_records()
         user_logs = [r for r in records if r["username"] == st.session_state.user]
-
         xp_list = [int(r.get("xp_today", 0)) for r in user_logs]
 
         if xp_list:
