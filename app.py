@@ -124,81 +124,151 @@ else:
         else:
             st.progress(progress_ratio)
 
-    # =====================================================
-    # MISSIONS
-    # =====================================================
-    if page == "⚔️ Missions":
+# =====================================================
+# MISSIONS
+# =====================================================
+if page == "⚔️ Missions":
 
-        st.header("⚓ Daily Missions")
+    st.header("⚓ Daily Missions")
 
-        water = st.checkbox("💧 6-8 Glasses Water")
-        veg = st.checkbox("🥦 3 Veg Colors")
-        food = st.checkbox("🍗 4 Food Groups")
-        exercise = st.checkbox("💪 Training Arc")
-        yoga = st.checkbox("🧘 Recovery")
-        reading = st.checkbox("📚 Reading")
-        writing = st.checkbox("✍️ Story Mode")
-        drums = st.checkbox("🥁 Drum Power")
-        piano = st.checkbox("🎹 Piano Skill")
-        ted = st.checkbox("🎥 Knowledge Boost")
-        skill = st.checkbox("🧠 Skill Upgrade")
-        outdoor = st.checkbox("🌊 Adventure Time")
-        chores = st.checkbox("🧹 Ship Duties")
-        cooking = st.checkbox("🍳 Chef Training")
+    # ---------------- WATER TRACKER ----------------
+    st.subheader("💧 Water Intake (8 Glasses)")
 
-        missions = [water, veg, food, exercise, yoga, reading,
-                    writing, drums, piano, ted, skill,
-                    outdoor, chores, cooking]
+    if "water_glasses" not in st.session_state:
+        st.session_state.water_glasses = [0]*8
 
-        completed = sum(missions)
-        base_xp = completed * 10
-        perfect_bonus = 40 if completed >= 12 else 0
+    cols = st.columns(8)
+    for i in range(8):
+        with cols[i]:
+            if st.button(
+                "🥛" if st.session_state.water_glasses[i] else "💧",
+                key=f"water_{i}"
+            ):
+                st.session_state.water_glasses[i] ^= 1
 
-        if water:
-            st.session_state.water_streak += 1
+    water_total = sum(st.session_state.water_glasses)
+    st.write(f"{water_total}/8 Glasses")
+
+    # ---------------- VEG COLOR TRACKER ----------------
+    st.subheader("🥦 Vegetable Colors (3 Colors)")
+
+    veg_colors = ["Green", "Red", "Orange"]
+    if "veg_tracker" not in st.session_state:
+        st.session_state.veg_tracker = {c:0 for c in veg_colors}
+
+    for color in veg_colors:
+        col1, col2 = st.columns([3,1])
+        with col1:
+            st.write(f"{color}")
+        with col2:
+            if st.button("+", key=f"veg_{color}"):
+                st.session_state.veg_tracker[color] += 1
+
+    veg_total = sum(st.session_state.veg_tracker.values())
+    st.write(f"Total Veg Portions: {veg_total}")
+
+    # ---------------- FOOD GROUP TRACKER ----------------
+    st.subheader("🍗 Food Groups (4 Groups)")
+
+    food_groups = ["Protein", "Carbs", "Fruits", "Dairy"]
+    if "food_tracker" not in st.session_state:
+        st.session_state.food_tracker = {g:0 for g in food_groups}
+
+    for group in food_groups:
+        col1, col2 = st.columns([3,1])
+        with col1:
+            st.write(f"{group}")
+        with col2:
+            if st.button("+", key=f"food_{group}"):
+                st.session_state.food_tracker[group] += 1
+
+    food_total = sum(st.session_state.food_tracker.values())
+    st.write(f"Total Food Portions: {food_total}")
+
+    # ---------------- SKILL / ACTIVITY TRACKER ----------------
+    st.subheader("⚔️ Skill & Training")
+
+    activities = [
+        "Exercise",
+        "Yoga",
+        "Reading",
+        "Writing",
+        "Drums",
+        "Piano",
+        "TED Talk",
+        "Skill Practice",
+        "Outdoor",
+        "Chores",
+        "Cooking"
+    ]
+
+    if "activity_tracker" not in st.session_state:
+        st.session_state.activity_tracker = {a:0 for a in activities}
+
+    for act in activities:
+        col1, col2 = st.columns([3,1])
+        with col1:
+            st.write(act)
+        with col2:
+            if st.button("+", key=f"act_{act}"):
+                st.session_state.activity_tracker[act] += 1
+
+    activity_total = sum(st.session_state.activity_tracker.values())
+    st.write(f"Total Activities Completed: {activity_total}")
+
+    # ---------------- XP CALCULATION ----------------
+    water_xp = water_total * 5
+    veg_xp = veg_total * 5
+    food_xp = food_total * 5
+    activity_xp = activity_total * 10
+
+    perfect_bonus = 50 if water_total == 8 and veg_total >=3 and food_total >=4 else 0
+
+    total_today = water_xp + veg_xp + food_xp + activity_xp + perfect_bonus
+
+    st.markdown(f"### ⭐ Potential XP Today: {total_today}")
+
+    # ---------------- SUBMIT ----------------
+    today_str = str(date.today())
+
+    if st.button("🏆 Submit Day"):
+
+        users = users_sheet.get_all_records()
+        current_user = next((u for u in users if u["username"] == st.session_state.user), None)
+
+        if current_user and str(current_user.get("last_login")) == today_str:
+            st.warning("Already completed today.")
         else:
-            st.session_state.water_streak = 0
 
-        streak_bonus = st.session_state.water_streak * 2
-        total_today = base_xp + perfect_bonus + streak_bonus
+            old_level = st.session_state.xp // 500
+            st.session_state.xp += total_today
+            new_level = st.session_state.xp // 500
 
-        today_str = str(date.today())
+            if new_level > old_level:
+                st.session_state.just_leveled_up = True
 
-        if st.button("🏆 Submit Day"):
+            log_sheet.append_row([
+                st.session_state.user,
+                today_str,
+                water_total,
+                veg_total,
+                food_total,
+                activity_total,
+                total_today
+            ])
 
-            users = users_sheet.get_all_records()
-            current_user = next((u for u in users if u["username"] == st.session_state.user), None)
+            for idx, u in enumerate(users):
+                if u["username"] == st.session_state.user:
+                    users_sheet.update(f"C{idx+2}", st.session_state.xp)
+                    users_sheet.update(f"E{idx+2}", today_str)
 
-            if current_user and str(current_user.get("last_login")) == today_str:
-                st.warning("Already completed today.")
-            else:
+            # RESET DAILY TRACKERS
+            st.session_state.water_glasses = [0]*8
+            st.session_state.veg_tracker = {c:0 for c in veg_colors}
+            st.session_state.food_tracker = {g:0 for g in food_groups}
+            st.session_state.activity_tracker = {a:0 for a in activities}
 
-                old_level = st.session_state.xp // 500
-                st.session_state.xp += total_today
-                new_level = st.session_state.xp // 500
-
-                if new_level > old_level:
-                    st.session_state.just_leveled_up = True
-
-                log_sheet.append_row([
-                    st.session_state.user,
-                    today_str,
-                    total_today
-                ])
-
-                for idx, u in enumerate(users):
-                    if u["username"] == st.session_state.user:
-                        users_sheet.update(f"C{idx+2}", st.session_state.xp)
-                        users_sheet.update(f"D{idx+2}", st.session_state.water_streak)
-                        users_sheet.update(f"E{idx+2}", today_str)
-
-                st.success(f"+{total_today} XP earned!")
-
-        if st.session_state.just_leveled_up:
-            st.balloons()
-            st.image("https://media.giphy.com/media/12jcwKEZNh4GSQ/giphy.gif")
-            st.success("LEVEL UP! Luffy powered up!")
-            st.session_state.just_leveled_up = False
+            st.success(f"+{total_today} XP earned!")
 
     # =====================================================
     # BOSS BATTLE
